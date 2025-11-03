@@ -6,11 +6,11 @@ author: ZeroEnds
 description: Web-based skin management for your server.
 softdepend: [SkinsRestorer]
 commands:
-  skin:
+  skinhub:
     description: SkinHub main command.
-    aliases: [skinhub]
+    aliases: [skin]
     usage: /<command> [pin]
 permissions:
   skinhub.use:
-    description: Allows using the /skin pin command.
+    description: Allows using the /skinhub pin command.
     default: true
