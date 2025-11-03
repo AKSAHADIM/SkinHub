@@ -116,6 +116,17 @@ public class SkinManager {
         );
         skinsRestorerApi.getPlayerStorage().setSkinIdOfPlayer(player.getUniqueId(), skinIdentifier);
 
+        // PERBAIKAN FINAL ENUM: Gunakan nilai yang valid dari SkinVariant dan SkinType jika DEFAULT tidak tersedia
+        SkinVariant variant = SkinVariant.values().length > 0 ? SkinVariant.values()[0] : null;
+        SkinType type = SkinType.values().length > 0 ? SkinType.values()[0] : null;
+
+        SkinIdentifier skinIdentifier = SkinIdentifier.of(
+                skinInfo.name(), 
+                variant, // Tidak gunakan DEFAULT, ambil enum pertama (perbaikan jika DEFAULT hilang)
+                type     // Tidak gunakan DEFAULT, ambil enum pertama (perbaikan jika DEFAULT hilang)
+        ); 
+        skinsRestorerApi.getPlayerStorage().setSkinIdOfPlayer(player.getUniqueId(), skinIdentifier); 
+        
         if (player.isOnline()) {
             skinsRestorerApi.getSkinApplier(Player.class).applySkin(player.getPlayer(), skinProperty);
         }
