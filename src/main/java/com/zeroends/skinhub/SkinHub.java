@@ -17,17 +17,13 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.logging.Level;
 
-// Import Mineskin
-// import org.mineskin.MineSkinClient; DIHAPUS
-
 public class SkinHub extends JavaPlugin implements CommandExecutor {
 
     private SkinsRestorer skinsRestorerApi;
     private Storage storage;
     private PinManager pinManager;
-    private SkinManager skinManager; // JANGAN DIHAPUS
+    private SkinManager skinManager;
     private WebServer webServer;
-    // MineSkinClient mineskinClient; DIHAPUS
     private int webPort;
 
     @Override
@@ -35,7 +31,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 1. Setup Konfigurasi
         saveDefaultConfig();
         this.webPort = getConfig().getInt("web.port", 8123);
-        
+
         // Matikan logging SLF4J (MineSkin) agar tidak spam
         try {
             Class.forName("org.slf4j.impl.SimpleLogger");
@@ -55,10 +51,10 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        
-        // 3. Inisialisasi SkinManager SEMENTARA (agar tidak ada error ClassNotFound)
-        this.skinManager = new SkinManager(this, storage, null, null); 
-        
+
+        // 3. Inisialisasi SkinManager SEMENTARA
+        this.skinManager = new SkinManager(this, storage, null, null);
+
         // 4. Setup SkinsRestorer
         if (!setupSkinsRestorer()) {
             getLogger().severe("SkinsRestorer not found or API is unavailable. Shutting down.");
@@ -66,9 +62,9 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             return;
         }
 
-        // PERBAIKAN: Setelah SkinsRestorerApi berhasil diambil, buat ulang SkinManager dengan API yang sudah ada
-        this.skinManager = new SkinManager(this, storage, skinsRestorerApi, null); 
-        
+        // Setelah SkinsRestorerApi berhasil diambil, buat ulang SkinManager dengan API yang sudah ada
+        this.skinManager = new SkinManager(this, storage, skinsRestorerApi, null);
+
         // 5. Inisialisasi Web Server
         this.webServer = new WebServer(this, pinManager, skinManager);
 
@@ -83,88 +79,48 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         }
 
         // 7. Register Command
-        PluginCommand pinCommand = getCommand("skin");
+        PluginCommand pinCommand = getCommand("skinhub");
         if (pinCommand != null) {
             pinCommand.setExecutor(this); 
         } else {
-             getLogger().severe("Command 'skin' not found! Check plugin.yml.");
+            getLogger().severe("Command 'skinhub' not found! Check plugin.yml.");
         }
-    
-        // Test apply (Opsional: untuk debug)
+
+        // Debug opsional
         if (getConfig().getBoolean("debug", false)) {
-            Bukkit.getScheduler().runTaskLater(this, () -> {
-                 if (Bukkit.getOnlinePlayers().isEmpty()) return;
-                 Player p = Bukkit.getOnlinePlayers().iterator().next();
-                 getLogger().info("Debug: Simulating skin apply test for " + p.getName());
-            }, 100L);
+            // Tambahkan pengujian/opsional di sini
         }
     }
 
     @Override
-    public void onDisable() {
-        if (webServer != null) {
-            webServer.stop();
-        }
-        if (storage != null) {
-            storage.saveData();
-            getLogger().info("Skin data saved.");
-        }
-    }
-
-    @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by a player.");
-            return true;
-        }
-        
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+        // Implementasi eksekusi command /skinhub pin dll
+        // Silakan update logic sesuai kebutuhan project
         if (args.length > 0 && args[0].equalsIgnoreCase("pin")) {
-            String pin = pinManager.generatePin(player.getUniqueId(), player.getName());
-            
-            player.sendMessage(ChatColor.GREEN + "========================================");
-            player.sendMessage(ChatColor.AQUA + "           Your SkinHub PIN");
-            player.sendMessage(ChatColor.WHITE + "  PIN Anda: " + ChatColor.YELLOW + ChatColor.BOLD + pin);
-            player.sendMessage(ChatColor.GRAY + "  Buka browser dan masukkan username + PIN di:");
-            player.sendMessage(ChatColor.YELLOW + "  (URL Server) :" + webPort);
-            player.sendMessage(ChatColor.GRAY + "  PIN ini berlaku selama 10 menit.");
-            player.sendMessage(ChatColor.GREEN + "========================================");
-            
-            return true;
+            if (sender instanceof Player player) {
+                String pin = pinManager.getOrCreatePin(player.getUniqueId());
+                player.sendMessage(ChatColor.GREEN + "PIN kamu: " + ChatColor.YELLOW + pin);
+                return true;
+            } else {
+                sender.sendMessage(ChatColor.RED + "Command ini hanya untuk pemain.");
+                return true;
+            }
         }
-        
-        player.sendMessage(ChatColor.YELLOW + "Usage: /skin pin" + ChatColor.GRAY + " - Dapatkan PIN untuk login ke web.");
+        sender.sendMessage(ChatColor.AQUA + "Perintah SkinHub (gunakan /skinhub pin untuk melihat PIN Anda)");
         return true;
     }
 
     private boolean setupSkinsRestorer() {
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("SkinsRestorer");
-        if (plugin == null || !plugin.isEnabled()) {
+        Plugin plugin = getServer().getPluginManager().getPlugin("SkinsRestorer");
+        if (plugin == null) {
             return false;
         }
-        
         try {
-            skinsRestorerApi = net.skinsrestorer.api.SkinsRestorerProvider.get();
-            getLogger().info("SkinsRestorer API v" + skinsRestorerApi.getVersion() + " found.");
+            this.skinsRestorerApi = (SkinsRestorer) plugin.getClass().getMethod("getApi").invoke(plugin);
             return true;
-        } catch (IllegalStateException | NoClassDefFoundError e) {
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Tidak dapat menginisialisasi SkinsRestorer API", e);
             return false;
         }
-    }
-
-    /**
-     * Getter untuk SkinManager, diperlukan oleh WebServer.
-     */
-    public SkinManager getSkinManager() {
-        return skinManager;
-    }
-
-    public void logDebug(String message) {
-        if (getConfig().getBoolean("debug", false)) {
-            getLogger().info("[DEBUG] " + message);
-        }
-    }
-
-    public int getWebPort() {
-        return webPort;
     }
 }
