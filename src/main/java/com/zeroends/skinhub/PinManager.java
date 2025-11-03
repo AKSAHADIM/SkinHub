@@ -10,11 +10,13 @@ public class PinManager {
     private final SkinHub plugin;
     private final Map<UUID, String> pinMap; // Maps player UUIDs to PINs
     private final Map<String, UUID> pinToUuidMap; // Reverse lookup
+    private final Map<String, UserInfo> sessionMap; // Maps session tokens to user info
 
     public PinManager(SkinHub plugin) {
         this.plugin = plugin;
         this.pinMap = new ConcurrentHashMap<>();
         this.pinToUuidMap = new ConcurrentHashMap<>();
+        this.sessionMap = new ConcurrentHashMap<>();
     }
 
     public String getOrCreatePin(UUID uuid) {
@@ -57,12 +59,21 @@ public class PinManager {
         return String.valueOf(number);
     }
 
-    public UserInfo validateSession(String token) {
-        // Dummy: Silakan ganti implementasi sesuai session management sesungguhnya
-        if (token == null || token.isEmpty()) return null;
-        UUID uuid = getUuidByPin(token);
-        if (uuid == null) return null;
-        return new UserInfo(uuid, token);
+    // === Session Management for Web ===
+    public void createSession(String sessionToken, UUID uuid, String username) {
+        sessionMap.put(sessionToken, new UserInfo(uuid, username));
+        plugin.logDebug("Create session for " + username + " with token: " + sessionToken);
+    }
+
+    public UserInfo validateSession(String sessionToken) {
+        UserInfo info = sessionMap.get(sessionToken);
+        plugin.logDebug("Validasi session untuk token: " + sessionToken + " hasil: " + (info != null ? info.uuid : "null"));
+        return info;
+    }
+
+    public void removeSession(String sessionToken) {
+        UserInfo info = sessionMap.remove(sessionToken);
+        plugin.logDebug("Session removed for token: " + sessionToken + " user: " + (info != null ? info.username : "null"));
     }
 
     public record UserInfo(UUID uuid, String username) {}
