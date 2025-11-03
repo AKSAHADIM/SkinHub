@@ -2,8 +2,8 @@ package com.zeroends.skinhub;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.skinsrestorer.api.SkinsRestorer;
-import net.skinsrestorer.api.exception.DataRequestException;
+import net.skinsrestorer.api.SkinsRestorerProvider;
+import net.skinsrestorer.api.SkinsRestorerAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -20,7 +20,7 @@ import java.util.logging.Level;
 
 public class SkinHub extends JavaPlugin implements CommandExecutor {
 
-    private SkinsRestorer skinsRestorerApi;
+    private SkinsRestorerAPI skinsRestorerApi;
     private Storage storage;
     private PinManager pinManager;
     private SkinManager skinManager;
@@ -54,7 +54,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 3. Inisialisasi SkinManager SEMENTARA
         this.skinManager = new SkinManager(this, storage, null, null);
 
-        // 4. Setup SkinsRestorer
+        // 4. Setup SkinsRestorer dengan API yang kompatibel v15+
         if (!setupSkinsRestorer()) {
             getLogger().severe("SkinsRestorer not found or API is unavailable. Shutting down.");
             getServer().getPluginManager().disablePlugin(this);
@@ -112,12 +112,13 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
     public int getWebPort() { return webPort; }
 
     private boolean setupSkinsRestorer() {
-        Plugin plugin = getServer().getPluginManager().getPlugin("SkinsRestorer");
-        if (plugin == null) {
-            return false;
-        }
         try {
-            this.skinsRestorerApi = (SkinsRestorer) plugin.getClass().getMethod("getApi").invoke(plugin);
+            this.skinsRestorerApi = SkinsRestorerProvider.get();
+            if (this.skinsRestorerApi == null) {
+                getLogger().severe("SkinsRestorer API instance is null!");
+                return false;
+            }
+            getLogger().info("SkinsRestorer API found and initialized using SkinsRestorerProvider.");
             return true;
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Tidak dapat menginisialisasi SkinsRestorer API", e);
