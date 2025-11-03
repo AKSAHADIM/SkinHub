@@ -15,6 +15,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.UUID;
 import java.util.logging.Level;
 
 public class SkinHub extends JavaPlugin implements CommandExecutor {
@@ -32,20 +33,18 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         saveDefaultConfig();
         this.webPort = getConfig().getInt("web.port", 8123);
 
-        // Matikan logging SLF4J (MineSkin) agar tidak spam
+        // Matikan logging SLF4J agar tidak spam
         try {
             Class.forName("org.slf4j.impl.SimpleLogger");
             System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", getConfig().getBoolean("debug", false) ? "debug" : "warn");
-        } catch (ClassNotFoundException ignored) {
-            // Ignore if SimpleLogger is not on classpath
-        }
+        } catch (ClassNotFoundException ignored) { }
 
         // 2. Setup Tools
         Gson gson = new GsonBuilder().create();
         this.storage = new Storage(this, gson);
         this.pinManager = new PinManager(this);
 
-        // Muat data sebelum Mineskin Client diinisialisasi
+        // Muat data skin
         if (!storage.loadData()) {
             getLogger().severe("Failed to load skin data. Shutting down.");
             getServer().getPluginManager().disablePlugin(this);
@@ -61,8 +60,6 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-
-        // Setelah SkinsRestorerApi berhasil diambil, buat ulang SkinManager dengan API yang sudah ada
         this.skinManager = new SkinManager(this, storage, skinsRestorerApi, null);
 
         // 5. Inisialisasi Web Server
@@ -73,7 +70,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             webServer.start();
             getLogger().info("Web server started successfully on port " + webPort);
         } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Failed to start Web Server on port " + webPort + ". Is the port already in use?", e);
+            getLogger().log(Level.SEVERE, "Failed to start Web Server on port " + webPort, e);
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -81,21 +78,14 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 7. Register Command
         PluginCommand pinCommand = getCommand("skinhub");
         if (pinCommand != null) {
-            pinCommand.setExecutor(this); 
+            pinCommand.setExecutor(this);
         } else {
             getLogger().severe("Command 'skinhub' not found! Check plugin.yml.");
-        }
-
-        // Debug opsional
-        if (getConfig().getBoolean("debug", false)) {
-            // Tambahkan pengujian/opsional di sini
         }
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
-        // Implementasi eksekusi command /skinhub pin dll
-        // Silakan update logic sesuai kebutuhan project
         if (args.length > 0 && args[0].equalsIgnoreCase("pin")) {
             if (sender instanceof Player player) {
                 String pin = pinManager.getOrCreatePin(player.getUniqueId());
@@ -109,6 +99,17 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         sender.sendMessage(ChatColor.AQUA + "Perintah SkinHub (gunakan /skinhub pin untuk melihat PIN Anda)");
         return true;
     }
+
+    // Tambahkan logDebug untuk debug
+    public void logDebug(String message) {
+        if (getConfig().getBoolean("debug", false)) {
+            getLogger().info("[DEBUG] " + message);
+        }
+    }
+
+    // Getters untuk dependency WebServer
+    public SkinManager getSkinManager() { return skinManager; }
+    public int getWebPort() { return webPort; }
 
     private boolean setupSkinsRestorer() {
         Plugin plugin = getServer().getPluginManager().getPlugin("SkinsRestorer");
