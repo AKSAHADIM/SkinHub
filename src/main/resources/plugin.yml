@@ -1,0 +1,16 @@
+name: SkinHub
+version: '${project.version}'
+main: com.zeroends.skinhub.SkinHub
+api-version: '1.21'
+author: ZeroEnds
+description: Web-based skin management for your server.
+softdepend: [SkinsRestorer]
+commands:
+  skin:
+    description: SkinHub main command.
+    aliases: [skinhub]
+    usage: /<command> [pin]
+permissions:
+  skinhub.use:
+    description: Allows using the /skin pin command.
+    default: true

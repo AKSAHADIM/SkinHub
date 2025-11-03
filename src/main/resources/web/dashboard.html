@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkinHub - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/skinview3d@latest/dist/skinview3d.bundle.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header card">
+            <h2>Welcome, <span id="username-display">...</span></h2>
+            <button id="logout-btn" class="btn btn-danger">Logout</button>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="card">
+            <h3>My Skin Collection (<span id="skin-count">0</span>/<span id="max-skins">0</span>)</h3>
+            <div id="skin-collection" class="skin-grid">
+                </div>
+        </div>
+
+        <div class="card" id="upload-card">
+            <h3>Upload New Skin</h3>
+            <form id="upload-form">
+                <p>Must be a <strong>64x64 .png</strong> file, max 1MB.</p>
+                <div class="form-group">
+                    <label for="skin-name">Skin Name</label>
+                    <input type="text" id="skin-name" placeholder="e.g., 'Knight Armor'" required>
+                </div>
+                <div class="form-group">
+                    <label for="skin-file">Skin File (.png)</label>
+                    <input type="file" id="skin-file" accept="image/png" required>
+                </div>
+                <button type="submit" class="btn" id="upload-btn">Upload Skin</button>
+            </form>
+        </div>
+    </div>
+
+    <template id="skin-item-template">
+        <div class="skin-item">
+            <div class="skin-preview">
+                </div>
+            <p class="skin-name">Skin Name</p>
+            <div class="skin-actions">
+                <button class="btn btn-apply">Apply</button>
+                <button class="btn btn-danger btn-delete">Delete</button>
+            </div>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+</html>

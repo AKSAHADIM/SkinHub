@@ -1,0 +1,57 @@
+# SkinHub Configuration File
+# ==========================
+# 
+# web:
+#   port: 8123
+#     - Port untuk menjalankan web server internal.
+#
+#   pin-expiry-seconds: 600
+#     - Berapa lama (dalam detik) PIN berlaku setelah dibuat.
+#
+#   session-expiry-days: 30
+#     - Berapa lama (dalam hari) sesi login web akan tetap aktif di browser pemain.
+#
+# skin-management:
+#   max-skins: 5
+#     - Jumlah maksimum skin yang bisa disimpan oleh satu pemain.
+#
+#   allow-upload: true
+#     - Izinkan pemain mengunggah file .png dari komputer mereka.
+#
+#   upload-cooldown-seconds: 60
+#     - Waktu (dalam detik) yang harus ditunggu pemain sebelum bisa mengunggah skin baru lagi.
+#
+#   max-file-size-kb: 1024
+#     - Ukuran file maksimum (dalam kilobyte) untuk upload .png.
+#
+#   require-64x64: true
+#     - Jika true, hanya menerima skin dengan resolusi 64x64.
+#
+# storage:
+#   save-interval-minutes: 15
+#     - Seberapa sering plugin menyimpan data skins.json ke disk secara otomatis.
+#
+# debug: true # Dibuat true untuk tujuan debug
+#
+# mineskin:
+#   api-key: DUMMY_API_KEY_JANGAN_LUPA_GANTI_INI # <--- PERBAIKAN: Menambah Kunci DUMMY
+#
+
+web:
+  port: 8123
+  pin-expiry-seconds: 600
+  session-expiry-days: 30
+
+skin-management:
+  max-skins: 5
+  allow-upload: true
+  upload-cooldown-seconds: 60
+  max-file-size-kb: 1024
+  require-64x64: true
+
+storage:
+  save-interval-minutes: 15
+
+debug: true
+mineskin:
+  api-key: DUMMY_API_KEY_JANGAN_LUPA_GANTI_INI
