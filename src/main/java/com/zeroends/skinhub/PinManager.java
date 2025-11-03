@@ -1,127 +1,69 @@
 package com.zeroends.skinhub;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-
-import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 public class PinManager {
 
     private final SkinHub plugin;
-    private final SecureRandom random = new SecureRandom();
-
-    // Cache untuk PIN: Pin (String) -> UserInfo (UUID, Username)
-    private final Cache<String, UserInfo> pinCache;
-
-    // Cache untuk Sesi: Token (String) -> UserInfo (UUID, Username)
-    private final Cache<String, UserInfo> sessionCache;
-
-    // Menyimpan token aktif per UUID untuk manajemen sesi
-    private final Map<UUID, String> activeSessions = new HashMap<>();
+    private final Map<UUID, String> pinMap; // Maps player UUIDs to PINs
+    private final Map<String, UUID> pinToUuidMap; // Reverse lookup
 
     public PinManager(SkinHub plugin) {
         this.plugin = plugin;
-        long pinExpiry = plugin.getConfig().getLong("web.pin-expiry-seconds", 600);
-        long sessionExpiry = plugin.getConfig().getLong("web.session-expiry-days", 30);
-
-        this.pinCache = CacheBuilder.newBuilder()
-                .expireAfterWrite(pinExpiry, TimeUnit.SECONDS)
-                .build();
-        
-        this.sessionCache = CacheBuilder.newBuilder()
-                .expireAfterWrite(sessionExpiry, TimeUnit.DAYS)
-                .build();
+        this.pinMap = new ConcurrentHashMap<>();
+        this.pinToUuidMap = new ConcurrentHashMap<>();
     }
 
-    /**
-     * Membuat PIN 6 digit baru untuk pemain.
-     */
-    public String generatePin(UUID uuid, String username) {
-        String pin;
-        do {
-            pin = String.format("%06d", random.nextInt(999999));
-        } while (pinCache.getIfPresent(pin) != null); // Pastikan PIN unik
-
-        pinCache.put(pin, new UserInfo(uuid, username));
-        plugin.logDebug("Generated PIN " + pin + " for " + username);
+    public String getOrCreatePin(UUID uuid) {
+        String pin = pinMap.get(uuid);
+        if (pin != null) {
+            plugin.logDebug("PIN ditemukan untuk " + uuid + ": " + pin);
+            return pin;
+        }
+        pin = generatePin();
+        pinMap.put(uuid, pin);
+        pinToUuidMap.put(pin, uuid);
+        plugin.logDebug("Membuat PIN baru untuk " + uuid + ": " + pin);
         return pin;
     }
 
-    /**
-     * Memvalidasi PIN dan username.
-     * Jika valid, menghapus PIN dan membuat Token Sesi baru.
-     * @return Token Sesi jika valid, null jika tidak.
-     */
-    public String validatePin(String pin, String username) {
-        UserInfo userInfo = pinCache.getIfPresent(pin);
-
-        if (userInfo != null && userInfo.username().equalsIgnoreCase(username)) {
-            // PIN valid. Hapus PIN dan buat sesi.
-            pinCache.invalidate(pin);
-            plugin.logDebug("Validated PIN " + pin + " for " + username);
-            return createSession(userInfo.uuid(), userInfo.username());
-        }
-        
-        plugin.logDebug("Failed validation for PIN " + pin + " and user " + username);
-        return null;
+    public boolean validatePin(UUID uuid, String pin) {
+        String currentPin = pinMap.get(uuid);
+        boolean valid = (currentPin != null && currentPin.equals(pin));
+        plugin.logDebug("Validasi PIN " + pin + " untuk " + uuid + ": " + valid);
+        return valid;
     }
 
-    /**
-     * Membuat token sesi baru untuk pengguna.
-     */
-    private String createSession(UUID uuid, String username) {
-        // Hapus sesi lama jika ada
-        String oldToken = activeSessions.remove(uuid);
-        if (oldToken != null) {
-            sessionCache.invalidate(oldToken);
-        }
-
-        // Buat token baru
-        String token = generateSafeToken();
-        UserInfo userInfo = new UserInfo(uuid, username);
-
-        sessionCache.put(token, userInfo);
-        activeSessions.put(uuid, token);
-
-        plugin.logDebug("Created session token for " + username);
-        return token;
+    public UUID getUuidByPin(String pin) {
+        UUID uuid = pinToUuidMap.get(pin);
+        plugin.logDebug("UUID untuk PIN " + pin + ": " + uuid);
+        return uuid;
     }
 
-    /**
-     * Memvalidasi token sesi.
-     * @return UserInfo jika token valid, null jika tidak.
-     */
+    public void removePin(UUID uuid) {
+        String pin = pinMap.remove(uuid);
+        if (pin != null) {
+            pinToUuidMap.remove(pin);
+            plugin.logDebug("Hapus PIN untuk " + uuid + ": " + pin);
+        }
+    }
+
+    private String generatePin() {
+        // Generate random 6-digit PIN
+        int number = ThreadLocalRandom.current().nextInt(100000, 1000000); // 6 digits
+        return String.valueOf(number);
+    }
+
     public UserInfo validateSession(String token) {
-        if (token == null || token.isEmpty()) {
-            return null;
-        }
-        return sessionCache.getIfPresent(token);
+        // Dummy: Silakan ganti implementasi sesuai session management sesungguhnya
+        if (token == null || token.isEmpty()) return null;
+        UUID uuid = getUuidByPin(token);
+        if (uuid == null) return null;
+        return new UserInfo(uuid, token);
     }
 
-    /**
-     * Menghapus sesi (logout).
-     */
-    public void invalidateSession(String token) {
-        UserInfo userInfo = sessionCache.getIfPresent(token);
-        if (userInfo != null) {
-            activeSessions.remove(userInfo.uuid());
-            sessionCache.invalidate(token);
-            plugin.logDebug("Invalidated session for " + userInfo.username());
-        }
-    }
-
-    private String generateSafeToken() {
-        byte[] bytes = new byte[32];
-        random.nextBytes(bytes);
-        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    /**
-     * Data record untuk menyimpan info pengguna di cache.
-     */
     public record UserInfo(UUID uuid, String username) {}
 }
