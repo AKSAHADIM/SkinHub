@@ -4,18 +4,15 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.skinsrestorer.api.SkinsRestorer;
 import net.skinsrestorer.api.SkinsRestorerProvider;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.UUID;
 import java.util.logging.Level;
 
 public class SkinHub extends JavaPlugin implements CommandExecutor {
@@ -33,11 +30,20 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         saveDefaultConfig();
         this.webPort = getConfig().getInt("web.port", 8123);
 
-        // Matikan logging SLF4J agar tidak spam
+        // Set SimpleLogger level jika tersedia (perhatikan kemungkinan relocation)
         try {
-            Class.forName("org.slf4j.impl.SimpleLogger");
-            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", getConfig().getBoolean("debug", false) ? "debug" : "warn");
-        } catch (ClassNotFoundException ignored) { }
+            boolean debug = getConfig().getBoolean("debug", false);
+            try {
+                Class.forName("org.slf4j.impl.SimpleLogger");
+                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", debug ? "debug" : "warn");
+            } catch (ClassNotFoundException e) {
+                // Coba versi yang di-relocate oleh shading
+                Class.forName("com.zeroends.skinhub.libs.slf4j.impl.SimpleLogger");
+                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", debug ? "debug" : "warn");
+            }
+        } catch (ClassNotFoundException ignored) {
+            // Jika tidak ada SimpleLogger, Javalin akan memberi saran di log, non-fatal
+        }
 
         // 2. Setup Tools
         Gson gson = new GsonBuilder().create();
@@ -54,7 +60,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 3. Inisialisasi SkinManager SEMENTARA
         this.skinManager = new SkinManager(this, storage, null, null);
 
-        // 4. Setup SkinsRestorer dengan cara benar
+        // 4. Setup SkinsRestorer dengan cara benar (v15+)
         if (!setupSkinsRestorer()) {
             getLogger().severe("SkinsRestorer not found or API is unavailable. Shutting down.");
             getServer().getPluginManager().disablePlugin(this);
@@ -65,7 +71,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 5. Inisialisasi Web Server
         this.webServer = new WebServer(this, pinManager, skinManager);
 
-        // 6. Mulai Web Server (Async)
+        // 6. Mulai Web Server
         try {
             webServer.start();
             getLogger().info("Web server started successfully on port " + webPort);
@@ -81,6 +87,18 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             pinCommand.setExecutor(this);
         } else {
             getLogger().severe("Command 'skinhub' not found! Check plugin.yml.");
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        // Pastikan web server berhenti saat plugin dinonaktifkan agar port dilepas
+        try {
+            if (webServer != null) {
+                webServer.stop();
+            }
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING, "Error while stopping web server", e);
         }
     }
 
@@ -107,7 +125,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         }
     }
 
-    // Getters untuk dependency WebServer
+    // Getters
     public SkinManager getSkinManager() { return skinManager; }
     public int getWebPort() { return webPort; }
 
