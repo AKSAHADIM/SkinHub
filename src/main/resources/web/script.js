@@ -30,7 +30,7 @@ async function handleLoginSubmit(event) {
     }
 
     try {
-        // Perbaikan: Kirim username & pin sebagai form data (bukan session/cookie)
+        // Kirim username & pin sebagai JSON
         const response = await fetch(`${API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -41,7 +41,6 @@ async function handleLoginSubmit(event) {
 
         if (response.ok && data.success) {
             showMessage('Login successful! Redirecting...', 'success');
-            // Redirect to dashboard (relative path)
             window.location.href = 'dashboard.html';
         } else {
             showMessage(data.message || 'Invalid username or PIN.', 'error');
@@ -57,19 +56,16 @@ async function handleLoginSubmit(event) {
 let skinViewerInstances = new Map(); // Map to store 3D viewers by skinId
 
 async function initDashboardPage() {
-    // Add logout listener
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
 
-    // Add upload listener
     const uploadForm = document.getElementById('upload-form');
     if (uploadForm) {
         uploadForm.addEventListener('submit', handleUploadSubmit);
     }
     
-    // Load dashboard data
     await fetchDashboardData();
 }
 
@@ -78,7 +74,6 @@ async function fetchDashboardData() {
         const response = await fetch(`${API_URL}/dashboard/data`);
         
         if (!response.ok) {
-            // If unauthorized (cookie expired/invalid), redirect to login
             if (response.status === 401 || response.status === 403) {
                 window.location.href = 'index.html';
                 return;
@@ -89,23 +84,19 @@ async function fetchDashboardData() {
         const data = await response.json();
 
         if (data.success) {
-            // Populate user info
             document.getElementById('username-display').textContent = data.username;
             document.getElementById('skin-count').textContent = data.skins.length;
             document.getElementById('max-skins').textContent = data.maxSkins;
 
-            // Check if upload should be enabled
             if (data.skins.length >= data.maxSkins) {
                 document.getElementById('upload-card').classList.add('hidden');
             } else {
                 document.getElementById('upload-card').classList.remove('hidden');
             }
 
-            // Populate skin collection
             const collectionDiv = document.getElementById('skin-collection');
-            collectionDiv.innerHTML = ''; // Clear existing
+            collectionDiv.innerHTML = '';
             
-            // Hapus instance viewer lama
             skinViewerInstances.forEach(viewer => viewer.dispose());
             skinViewerInstances.clear();
 
@@ -132,7 +123,6 @@ function createSkinElement(skin) {
     el.dataset.skinId = skinId;
     el.querySelector('.skin-name').textContent = skin.name;
 
-    // Attach 3D viewer
     const preview = el.querySelector('.skin-preview');
     if (window.skinview3d) {
         try {
@@ -145,10 +135,9 @@ function createSkinElement(skin) {
                     signature: skin.signature
                 }
             });
-            preview.innerHTML = ''; // Clear "loading" text
+            preview.innerHTML = '';
             preview.appendChild(skinViewer.canvas);
             
-            // Add animation
             let control = skinview3d.createOrbitControls(skinViewer);
             control.enableRotate = true;
             control.enableZoom = false;
@@ -165,7 +154,6 @@ function createSkinElement(skin) {
         preview.textContent = '3D Preview disabled';
     }
 
-    // Add event listeners
     el.querySelector('.btn-apply').addEventListener('click', () => handleApplySkin(skinId, el));
     el.querySelector('.btn-delete').addEventListener('click', () => handleDeleteSkin(skinId, el));
 
@@ -191,9 +179,7 @@ async function handleApplySkin(skinId, element) {
 }
 
 async function handleDeleteSkin(skinId, element) {
-    if (!confirm('Are you sure you want to delete this skin?')) {
-        return;
-    }
+    if (!confirm('Are you sure you want to delete this skin?')) return;
     
     try {
         const response = await fetch(`${API_URL}/dashboard/delete`, {
@@ -204,16 +190,11 @@ async function handleDeleteSkin(skinId, element) {
         const data = await response.json();
         if (response.ok && data.success) {
             showMessage(data.message || 'Skin deleted.', 'success');
-            // Remove element from DOM
             element.remove();
-            
-            // Clean up 3D viewer instance
             if (skinViewerInstances.has(skinId)) {
                 skinViewerInstances.get(skinId).dispose();
                 skinViewerInstances.delete(skinId);
             }
-            
-            // Re-fetch data to update counts and upload form
             await fetchDashboardData();
         } else {
             showMessage(data.message || 'Failed to delete skin.', 'error');
@@ -243,32 +224,24 @@ async function handleUploadSubmit(event) {
         return;
     }
 
-    // Disable button during upload
     uploadBtn.disabled = true;
     uploadBtn.textContent = 'Uploading...';
 
     const formData = new FormData();
-    // Rename file on the fly for the server
     formData.append('skinFile', file, skinName + '.png');
 
     try {
         const response = await fetch(`${API_URL}/dashboard/upload`, {
             method: 'POST',
             body: formData
-            // Note: Don't set Content-Type header, browser does it for FormData
         });
 
         const data = await response.json();
         
         if (response.ok && data.success) {
             showMessage(data.message || 'Upload successful!', 'success');
-            
-            // Clear form
             form.reset();
-            
-            // Re-fetch data to add skin, update counts, and hide upload form if full
             await fetchDashboardData();
-            
         } else {
             showMessage(data.message || 'Upload failed.', 'error');
         }
@@ -277,7 +250,6 @@ async function handleUploadSubmit(event) {
         showMessage('Server error during upload.', 'error');
         console.error('Upload error:', error);
     } finally {
-        // Re-enable button
         uploadBtn.disabled = false;
         uploadBtn.textContent = 'Upload Skin';
     }
@@ -287,23 +259,20 @@ async function handleLogout() {
     try {
         await fetch(`${API_URL}/logout`, { method: 'POST' });
     } catch (error) {
-        // Ignore error, just redirect
+        // Ignore
     } finally {
         window.location.href = 'index.html';
     }
 }
 
-
 // --- Utility Functions ---
-
-/**
- * Displays a message to the user.
- */
 function showMessage(message, type) {
-    // Finds the message box & displays error/success messages
-    const box = document.getElementById('message-box');
+    // FIX: gunakan id 'message' sesuai HTML
+    const box = document.getElementById('message');
+    if (!box) return;
     box.textContent = message;
-    box.className = type === 'success' ? 'success' : 'error';
+    box.classList.remove('error', 'success');
+    box.classList.add(type === 'success' ? 'success' : 'error');
     box.style.display = 'block';
     setTimeout(() => { box.style.display = 'none'; }, 4000);
 }
