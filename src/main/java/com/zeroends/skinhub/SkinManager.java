@@ -33,15 +33,12 @@ public class SkinManager {
     private final SkinHub plugin;
     private final Storage storage;
     private final SkinsRestorer skinsRestorerApi;
-
     private final HttpClient httpClient;
     private final Gson gson;
     private final String mineskinApiKey;
-
     private final int maxSkins;
     private final boolean require64x64;
     private final long maxFileSize;
-
     private final Cache<UUID, Long> uploadCooldowns;
 
     public SkinManager(SkinHub plugin, Storage storage, SkinsRestorer skinsRestorerApi, Object mineskinClientPlaceholder) {
@@ -61,8 +58,6 @@ public class SkinManager {
                 .expireAfterWrite(cooldownSeconds, TimeUnit.SECONDS)
                 .build();
     }
-
-    // --- SKINSRESTORER LOGIC ---
 
     public List<PlayerData.SkinInfo> getSkinCollection(UUID playerUuid) {
         return storage.getPlayerData(playerUuid).getSkinSlots();
@@ -90,7 +85,6 @@ public class SkinManager {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         SkinProperty skinProperty = SkinProperty.of(skinInfo.texture(), skinInfo.signature());
 
-        // 1. Simpan Data Skin (Permanen, raw data) di SkinStorage
         String lastKnownName = player.getName() != null ? player.getName() : "Unknown";
         skinsRestorerApi.getSkinStorage().setPlayerSkinData(
                 player.getUniqueId(),
@@ -99,16 +93,9 @@ public class SkinManager {
                 System.currentTimeMillis()
         );
 
-        // 2. Hubungkan Pemain ke Skin ID (Persistensi saat Join/Login)
-        // PERBAIKAN FINAL ENUM: Gunakan nilai enum pertama jika DEFAULT hilang
-        SkinVariant variant = null;
-        SkinType type = null;
-        if (SkinVariant.values().length > 0) {
-            variant = SkinVariant.values()[0];
-        }
-        if (SkinType.values().length > 0) {
-            type = SkinType.values()[0];
-        }
+        SkinVariant variant = SkinVariant.values().length > 0 ? SkinVariant.values()[0] : null;
+        SkinType type = SkinType.values().length > 0 ? SkinType.values()[0] : null;
+
         SkinIdentifier skinIdentifier = SkinIdentifier.of(
                 skinInfo.name(),
                 variant,
@@ -116,17 +103,6 @@ public class SkinManager {
         );
         skinsRestorerApi.getPlayerStorage().setSkinIdOfPlayer(player.getUniqueId(), skinIdentifier);
 
-        // PERBAIKAN FINAL ENUM: Gunakan nilai yang valid dari SkinVariant dan SkinType jika DEFAULT tidak tersedia
-        SkinVariant variant = SkinVariant.values().length > 0 ? SkinVariant.values()[0] : null;
-        SkinType type = SkinType.values().length > 0 ? SkinType.values()[0] : null;
-
-        SkinIdentifier skinIdentifier = SkinIdentifier.of(
-                skinInfo.name(), 
-                variant, // Tidak gunakan DEFAULT, ambil enum pertama (perbaikan jika DEFAULT hilang)
-                type     // Tidak gunakan DEFAULT, ambil enum pertama (perbaikan jika DEFAULT hilang)
-        ); 
-        skinsRestorerApi.getPlayerStorage().setSkinIdOfPlayer(player.getUniqueId(), skinIdentifier); 
-        
         if (player.isOnline()) {
             skinsRestorerApi.getSkinApplier(Player.class).applySkin(player.getPlayer(), skinProperty);
         }
@@ -153,10 +129,7 @@ public class SkinManager {
         return removed;
     }
 
-    // --- MINESKIN MANUAL HTTP CLIENT LOGIC (NO CHANGES) ---
-
     public CompletableFuture<UploadResult> processUploadedSkin(UUID playerUuid, byte[] fileData, String fileName) {
-        // 1. Cek Cooldown & Validasi
         if (uploadCooldowns.getIfPresent(playerUuid) != null) {
             return CompletableFuture.completedFuture(new UploadResult(false, "Please wait before uploading again.", null));
         }
@@ -179,19 +152,15 @@ public class SkinManager {
 
         uploadCooldowns.put(playerUuid, System.currentTimeMillis());
 
-        // 5. Buat Request Multipart/Form-Data
         String boundary = "---MineskinBoundary" + System.currentTimeMillis();
         HttpRequest request = buildMultipartRequest(fileData, fileName, boundary);
-
         plugin.logDebug("Sending manual Mineskin request for " + fileName);
 
-        // 6. Jalankan Request secara Asinkron
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     if (response.statusCode() != 200 && response.statusCode() != 201) {
                         String msg = parseApiError(response, this.gson);
                         plugin.getLogger().log(Level.WARNING, String.format("Mineskin API Failed (Status: %d, Body: %s)", response.statusCode(), msg));
-
                         if (response.statusCode() == 429) {
                             return new UploadResult(false, "Rate limit hit. Please wait based on API response headers.", null);
                         }
@@ -200,15 +169,12 @@ public class SkinManager {
                         }
                         return new UploadResult(false, "API Error (" + response.statusCode() + "): " + msg, null);
                     }
-
-                    // 7. Parsing Sukses
                     MineSkinResponse apiResponse = gson.fromJson(response.body(), MineSkinResponse.class);
 
                     if (apiResponse == null || apiResponse.data == null) {
                         plugin.getLogger().warning("Mineskin returned invalid JSON or null data. Body: " + response.body().substring(0, Math.min(response.body().length(), 100)));
                         return new UploadResult(false, "Failed to parse API response.", null);
                     }
-
                     MineSkinData data = apiResponse.data;
 
                     String apiSkinName = data.name;
@@ -236,11 +202,9 @@ public class SkinManager {
 
                     String message = "Network error: " + cause.getClass().getSimpleName();
 
-                    // PERBAIKAN: Tampilkan pesan error spesifik pada UI jika API key memang belum diisi
                     if (mineskinApiKey == null || mineskinApiKey.isEmpty() || mineskinApiKey.contains("DUMMY_API_KEY")) {
                         message = "API Key untuk Mineskin belum diisi di config.yml!";
                     }
-
                     return new UploadResult(false, message, null);
                 });
     }
@@ -249,17 +213,12 @@ public class SkinManager {
         String skinName = fileName.endsWith(".png") ? fileName.substring(0, fileName.length() - 4) : fileName;
 
         StringBuilder builder = new StringBuilder();
-
-        // --- Add Metadata (name and visibility=private) ---
         builder.append("--").append(boundary).append("\r\n");
         builder.append("Content-Disposition: form-data; name=\"name\"").append("\r\n\r\n");
         builder.append(skinName).append("\r\n");
-
         builder.append("--").append(boundary).append("\r\n");
         builder.append("Content-Disposition: form-data; name=\"visibility\"").append("\r\n\r\n");
-        builder.append("1").append("\r\n"); // 1 = Private
-
-        // --- Add File Data Placeholder ---
+        builder.append("1").append("\r\n");
         builder.append("--").append(boundary).append("\r\n");
         builder.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(fileName).append("\"\r\n");
         builder.append("Content-Type: image/png").append("\r\n\r\n");
@@ -281,7 +240,6 @@ public class SkinManager {
         if (mineskinApiKey != null && !mineskinApiKey.isEmpty()) {
             requestBuilder.header("Authorization", "Bearer " + mineskinApiKey);
         }
-
         return requestBuilder.build();
     }
 
@@ -291,8 +249,7 @@ public class SkinManager {
             if (apiResponse != null && apiResponse.error != null) {
                 return response.statusCode() + ": " + apiResponse.error;
             }
-        } catch (Exception ignored) { }
-
+        } catch (Exception ignored) {}
         return response.statusCode() + " (Body: " + response.body().substring(0, Math.min(response.body().length(), 100)) + ")";
     }
 
@@ -305,8 +262,6 @@ public class SkinManager {
     }
 
     public record UploadResult(boolean success, String message, PlayerData.SkinInfo skinInfo) {}
-
-    // --- GSON DATA MODELS ---
 
     private static class MineSkinResponse {
         String error;
