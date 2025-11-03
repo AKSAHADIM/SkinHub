@@ -1,5 +1,15 @@
-com/zeroends/skinhub/Storage.class
 com/zeroends/skinhub/SkinHub.class
+com/zeroends/skinhub/SkinManager$MineSkinResponse.class
+com/zeroends/skinhub/PlayerData$SkinInfo.class
 com/zeroends/skinhub/PinManager.class
 com/zeroends/skinhub/PinManager$UserInfo.class
+com/zeroends/skinhub/SkinManager$MineSkinData.class
+com/zeroends/skinhub/WebServer$LoginRequest.class
+com/zeroends/skinhub/WebServer$ApplyDeleteRequest.class
+com/zeroends/skinhub/Storage.class
+com/zeroends/skinhub/PlayerData.class
+com/zeroends/skinhub/SkinManager.class
+com/zeroends/skinhub/WebServer.class
+com/zeroends/skinhub/SkinManager$MineSkinTexture.class
+com/zeroends/skinhub/SkinManager$UploadResult.class
 com/zeroends/skinhub/Storage$1.class
