@@ -5,10 +5,14 @@ import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import io.javalin.http.UploadedFile;
 import io.javalin.http.staticfiles.Location;
-import io.javalin.util.JavalinBindException; // FIX: gunakan paket asli Javalin
+import io.javalin.util.JavalinBindException;
+
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.logging.Level;
 
 import static io.javalin.apibuilder.ApiBuilder.*;
@@ -38,12 +42,12 @@ public class WebServer {
             if (!retryOnBind) {
                 throw bindEx;
             }
-            // Retry sekali setelah jeda kecil (umumnya saat reload cepat, port belum rilis)
             try {
                 plugin.getLogger().info("Retrying to bind port " + port + " after " + retryWaitMs + " ms ...");
                 Thread.sleep(retryWaitMs);
-            } catch (InterruptedException ignored) {}
-            startOnPort(port); // Jika masih gagal, biarkan exception naik
+            } catch (InterruptedException ignored) { }
+            // Retry once; if still fails, let it bubble up
+            startOnPort(port);
         }
     }
 
@@ -80,6 +84,7 @@ public class WebServer {
         }
     }
 
+    // ======== Auth middleware ========
     private void authenticate(Context ctx) {
         String token = ctx.cookie("skinhub_session");
         PinManager.UserInfo userInfo = pinManager.validateSession(token);
@@ -93,17 +98,18 @@ public class WebServer {
         ctx.attribute("userInfo", userInfo);
     }
 
-    // Handler untuk POST /api/login
+    // ======== Login / Logout ========
+    // POST /api/login
     private void handleLogin(Context ctx) {
         String username = ctx.formParam("username");
         String pin = ctx.formParam("pin");
 
         if (username == null || pin == null) {
             try {
-                Map body = ctx.bodyAsClass(Map.class);
+                Map<?, ?> body = ctx.bodyAsClass(Map.class);
                 username = body.get("username") != null ? String.valueOf(body.get("username")) : null;
                 pin = body.get("pin") != null ? String.valueOf(body.get("pin")) : null;
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) { }
         }
 
         if (username == null || username.isEmpty() || pin == null || pin.isEmpty()) {
@@ -111,8 +117,10 @@ public class WebServer {
             return;
         }
 
-        // Resolve UUID via Bukkit offline cache
-        java.util.UUID uuid = org.bukkit.Bukkit.getOfflinePlayer(username).getUniqueId();
+        // Resolve UUID from username (server cache)
+        OfflinePlayer offline = Bukkit.getOfflinePlayer(username);
+        UUID uuid = offline != null ? offline.getUniqueId() : null;
+
         if (uuid == null) {
             ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Invalid username."));
             return;
@@ -123,13 +131,15 @@ public class WebServer {
             return;
         }
 
-        String sessionToken = java.util.UUID.randomUUID().toString();
+        String sessionToken = UUID.randomUUID().toString();
         pinManager.createSession(sessionToken, uuid, username);
-        // Cookie 30 hari
+        // Cookie 30 days
         ctx.cookie("skinhub_session", sessionToken, 60 * 60 * 24 * 30);
+
         ctx.json(Map.of("success", true, "message", "Login successful!"));
     }
 
+    // POST /api/logout
     private void handleLogout(Context ctx) {
         String token = ctx.cookie("skinhub_session");
         pinManager.removeSession(token);
@@ -137,9 +147,79 @@ public class WebServer {
         ctx.json(Map.of("success", true, "message", "Logged out."));
     }
 
-    // Handler untuk POST /api/dashboard/upload
+    // ======== Dashboard ========
+    // GET /api/dashboard/data
+    private void handleDashboardData(Context ctx) {
+        PinManager.UserInfo userInfo = ctx.attribute("userInfo");
+        if (userInfo == null) {
+            ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Unauthorized"));
+            return;
+        }
+
+        var skins = skinManager.getSkinCollection(userInfo.uuid());
+        int maxSkins = plugin.getConfig().getInt("skin-management.max-skins", 5);
+
+        ctx.json(Map.of(
+                "success", true,
+                "username", userInfo.username(),
+                "skins", skins,
+                "maxSkins", maxSkins
+        ));
+    }
+
+    // POST /api/dashboard/apply
+    private void handleApplySkin(Context ctx) {
+        PinManager.UserInfo userInfo = ctx.attribute("userInfo");
+        if (userInfo == null) {
+            ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Unauthorized"));
+            return;
+        }
+
+        Long skinId = readSkinId(ctx);
+        if (skinId == null) {
+            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "Invalid or missing skinId."));
+            return;
+        }
+
+        skinManager.applySkin(userInfo.uuid(), skinId).thenAccept(success -> {
+            if (Boolean.TRUE.equals(success)) {
+                ctx.json(Map.of("success", true, "message", "Skin applied!"));
+            } else {
+                ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "Failed to apply skin (not found?)."));
+            }
+        }).exceptionally(ex -> {
+            plugin.getLogger().log(Level.SEVERE, "Failed to apply skin for " + userInfo.username(), ex);
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).json(Map.of("success", false, "message", "Internal server error while applying skin."));
+            return null;
+        });
+    }
+
+    // POST /api/dashboard/delete
+    private void handleDeleteSkin(Context ctx) {
+        PinManager.UserInfo userInfo = ctx.attribute("userInfo");
+        if (userInfo == null) {
+            ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Unauthorized"));
+            return;
+        }
+
+        Long skinId = readSkinId(ctx);
+        if (skinId == null) {
+            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "Invalid or missing skinId."));
+            return;
+        }
+
+        boolean removed = skinManager.deleteSkin(userInfo.uuid(), skinId);
+        if (removed) {
+            ctx.json(Map.of("success", true, "message", "Skin deleted."));
+        } else {
+            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "Failed to delete skin (not found?)."));
+        }
+    }
+
+    // POST /api/dashboard/upload
     private void handleUpload(Context ctx) {
         PinManager.UserInfo userInfo = ctx.attribute("userInfo");
+
         if (userInfo == null) {
             ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Session check failed at handler."));
             return;
@@ -189,8 +269,18 @@ public class WebServer {
         }
     }
 
-    // Placeholder handlers (implement sesuai kebutuhan repo Anda)
-    private void handleDashboardData(Context ctx) { /* ... */ }
-    private void handleApplySkin(Context ctx) { /* ... */ }
-    private void handleDeleteSkin(Context ctx) { /* ... */ }
+    // ======== Helpers ========
+    private Long readSkinId(Context ctx) {
+        Long skinId = null;
+        try {
+            var body = ctx.bodyAsClass(Map.class);
+            Object idObj = body.get("skinId");
+            if (idObj instanceof Number n) {
+                skinId = n.longValue();
+            } else if (idObj != null) {
+                skinId = Long.parseLong(String.valueOf(idObj));
+            }
+        } catch (Exception ignored) { }
+        return skinId;
+    }
 }
