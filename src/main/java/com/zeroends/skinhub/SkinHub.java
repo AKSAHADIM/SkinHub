@@ -2,8 +2,8 @@ package com.zeroends.skinhub;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.skinsrestorer.api.SkinsRestorer;
 import net.skinsrestorer.api.SkinsRestorerProvider;
-import net.skinsrestorer.api.SkinsRestorerAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -20,7 +20,7 @@ import java.util.logging.Level;
 
 public class SkinHub extends JavaPlugin implements CommandExecutor {
 
-    private SkinsRestorerAPI skinsRestorerApi;
+    private SkinsRestorer skinsRestorer;
     private Storage storage;
     private PinManager pinManager;
     private SkinManager skinManager;
@@ -54,13 +54,13 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         // 3. Inisialisasi SkinManager SEMENTARA
         this.skinManager = new SkinManager(this, storage, null, null);
 
-        // 4. Setup SkinsRestorer dengan API yang kompatibel v15+
+        // 4. Setup SkinsRestorer dengan cara benar
         if (!setupSkinsRestorer()) {
             getLogger().severe("SkinsRestorer not found or API is unavailable. Shutting down.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        this.skinManager = new SkinManager(this, storage, skinsRestorerApi, null);
+        this.skinManager = new SkinManager(this, storage, skinsRestorer, null);
 
         // 5. Inisialisasi Web Server
         this.webServer = new WebServer(this, pinManager, skinManager);
@@ -113,8 +113,8 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
 
     private boolean setupSkinsRestorer() {
         try {
-            this.skinsRestorerApi = SkinsRestorerProvider.get();
-            if (this.skinsRestorerApi == null) {
+            this.skinsRestorer = SkinsRestorerProvider.get();
+            if (this.skinsRestorer == null) {
                 getLogger().severe("SkinsRestorer API instance is null!");
                 return false;
             }
