@@ -30,6 +30,7 @@ async function handleLoginSubmit(event) {
     }
 
     try {
+        // Perbaikan: Kirim username & pin sebagai form data (bukan session/cookie)
         const response = await fetch(`${API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -297,21 +298,12 @@ async function handleLogout() {
 
 /**
  * Displays a message to the user.
- * @param {string} text The message text.
- * @param {'success' | 'error'} type The message type.
  */
-function showMessage(text, type = 'error') {
-    const messageEl = document.getElementById('message');
-    if (!messageEl) return;
-    
-    messageEl.textContent = text;
-    messageEl.className = `message ${type}`;
-    
-    // Auto-hide message after 5 seconds
-    setTimeout(() => {
-        if (messageEl.textContent === text) {
-            messageEl.className = 'message';
-            messageEl.textContent = '';
-        }
-    }, 5000);
+function showMessage(message, type) {
+    // Finds the message box & displays error/success messages
+    const box = document.getElementById('message-box');
+    box.textContent = message;
+    box.className = type === 'success' ? 'success' : 'error';
+    box.style.display = 'block';
+    setTimeout(() => { box.style.display = 'none'; }, 4000);
 }
