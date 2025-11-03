@@ -5,8 +5,7 @@ import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import io.javalin.http.UploadedFile;
 import io.javalin.http.staticfiles.Location;
-
-import com.zeroends.skinhub.libs.javalin.util.JavalinBindException;
+import io.javalin.util.JavalinBindException; // FIX: gunakan paket asli Javalin
 
 import java.util.Map;
 import java.util.Objects;
@@ -190,7 +189,7 @@ public class WebServer {
         }
     }
 
-    // Placeholder handlers (pastikan implementasi Anda sesuai repositori)
+    // Placeholder handlers (implement sesuai kebutuhan repo Anda)
     private void handleDashboardData(Context ctx) { /* ... */ }
     private void handleApplySkin(Context ctx) { /* ... */ }
     private void handleDeleteSkin(Context ctx) { /* ... */ }
