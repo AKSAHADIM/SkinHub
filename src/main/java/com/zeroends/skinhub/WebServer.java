@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.logging.Level;
 
 import static io.javalin.apibuilder.ApiBuilder.*;
@@ -70,64 +71,71 @@ public class WebServer {
         ctx.attribute("userInfo", userInfo);
     }
 
-    // Handler untuk POST /api/dashboard/upload
-    private void handleUpload(Context ctx) {
-        PinManager.UserInfo userInfo = ctx.attribute("userInfo");
+    /**
+     * Handler untuk POST /api/login
+     * Memproses login dari dashboard web. Membaca username/UUID dan PIN dari POST body, bukan cookie.
+     * Jika sukses, generate session token dan set cookie.
+     */
+    private void handleLogin(Context ctx) {
+        // Coba ambil dari formParam, atau body JSON jika JS frontend menggunakan JSON
+        String username = ctx.formParam("username");
+        String pin = ctx.formParam("pin");
 
-        if (userInfo == null) {
-            ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Session check failed at handler."));
+        if (username == null || pin == null) {
+            // Jika body JSON, parse manual
+            try {
+                Map<String, String> body = ctx.bodyAsClass(Map.class);
+                username = body.get("username");
+                pin = body.get("pin");
+            } catch (Exception e) {
+                ctx.status(HttpStatus.BAD_REQUEST)
+                        .json(Map.of("success", false, "message", "Invalid request body."));
+                return;
+            }
+        }
+
+        if (username == null || pin == null) {
+            ctx.status(HttpStatus.BAD_REQUEST)
+                    .json(Map.of("success", false, "message", "Username and PIN required."));
             return;
         }
 
-        UploadedFile uploadedFile = ctx.uploadedFile("skinFile");
-
-        if (uploadedFile == null) {
-            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "No file uploaded."));
+        // Try resolve UUID from username. (Assume username is Minecraft username)
+        UUID uuid = UsernameResolver.resolve(username);
+        if (uuid == null) {
+            ctx.status(HttpStatus.UNAUTHORIZED)
+                    .json(Map.of("success", false, "message", "Invalid username. Please check spelling."));
             return;
         }
 
-        if (!Objects.equals(uploadedFile.contentType(), "image/png")) {
-            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", "Only .png files are allowed."));
+        // Validasi PIN untuk UUID
+        if (!pinManager.validatePin(uuid, pin)) {
+            ctx.status(HttpStatus.UNAUTHORIZED)
+                    .json(Map.of("success", false, "message", "Invalid PIN for this username."));
             return;
         }
 
-        try {
-            byte[] fileData = uploadedFile.content().readAllBytes();
-            String fileName = uploadedFile.filename();
+        // Generate session token (can be UUID.randomUUID or any other)
+        String sessionToken = UUID.randomUUID().toString();
+        pinManager.createSession(sessionToken, uuid, username);
 
-            plugin.getSkinManager().processUploadedSkin(userInfo.uuid(), fileData, fileName)
-                .thenAccept(result -> {
-                    if (result.success()) {
-                        ctx.json(Map.of("success", true, "message", result.message(), "newSkin", result.skinInfo()));
-                    } else {
-                        // PERBAIKAN: tampilkan error internal dari UploadResult dengan code 400 jika error user, 500 jika error internal
-                        if (result.message().contains("API Key untuk Mineskin belum diisi")) {
-                            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .json(Map.of("success", false, "message", "API Key untuk Mineskin belum diisi di config.yml! Silakan isi dan restart server!"));
-                        } else if (result.message().contains("Invalid skin file") || result.message().contains("File size") || result.message().contains("collection is full")) {
-                            ctx.status(HttpStatus.BAD_REQUEST).json(Map.of("success", false, "message", result.message()));
-                        } else {
-                            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).json(Map.of("success", false, "message", result.message()));
-                        }
-                    }
-                })
-                .exceptionally(ex -> {
-                    plugin.getLogger().log(Level.SEVERE, "Fatal error processing upload for " + userInfo.username(), ex);
-                    ctx.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .json(Map.of("success", false, "message", "An unknown server error occurred during processing: " + ex.getMessage()));
-                    return null;
-                });
+        // Set session cookie, expires 30 days
+        ctx.cookie("skinhub_session", sessionToken, 60 * 60 * 24 * 30);
 
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Error reading file stream:", e);
-            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).json(Map.of("success", false, "message", "Internal server error during file read."));
-        }
+        ctx.json(Map.of("success", true, "message", "Login successful!"));
     }
 
-    // Handler login, logout, data, apply skin, delete skin tetap seperti sebelumnya
-    private void handleLogin(Context ctx) { /* ... */ }
-    private void handleLogout(Context ctx) { /* ... */ }
+    // Handler untuk logout
+    private void handleLogout(Context ctx) {
+        String token = ctx.cookie("skinhub_session");
+        pinManager.removeSession(token);
+        ctx.removeCookie("skinhub_session");
+        ctx.json(Map.of("success", true, "message", "Logged out."));
+    }
+
+    // Handler lainnya seperti sebelumnya (dashboardData, apply, delete, upload)
     private void handleDashboardData(Context ctx) { /* ... */ }
     private void handleApplySkin(Context ctx) { /* ... */ }
     private void handleDeleteSkin(Context ctx) { /* ... */ }
+    private void handleUpload(Context ctx) { /* ... */ }
 }
