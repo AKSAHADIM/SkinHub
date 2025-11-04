@@ -5,9 +5,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.gson.Gson;
 import net.skinsrestorer.api.SkinsRestorer;
 import net.skinsrestorer.api.property.SkinProperty;
-import net.skinsrestorer.api.property.SkinIdentifier;
-import net.skinsrestorer.api.property.SkinVariant;
-import net.skinsrestorer.api.property.SkinType;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -26,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-import java.util.concurrent.ExecutionException;
 
 public class SkinManager {
 
@@ -86,6 +82,8 @@ public class SkinManager {
         SkinProperty skinProperty = SkinProperty.of(skinInfo.texture(), skinInfo.signature());
 
         String lastKnownName = player.getName() != null ? player.getName() : "Unknown";
+
+        // Simpan SkinProperty untuk pemain; ini yang akan dibaca SR saat login/refresh
         skinsRestorerApi.getSkinStorage().setPlayerSkinData(
                 player.getUniqueId(),
                 lastKnownName,
@@ -93,23 +91,16 @@ public class SkinManager {
                 System.currentTimeMillis()
         );
 
-        SkinVariant variant = SkinVariant.values().length > 0 ? SkinVariant.values()[0] : null;
-        SkinType type = SkinType.values().length > 0 ? SkinType.values()[0] : null;
+        // Pastikan tidak ada skinId mapping yang salah, agar SR tidak mencoba parse identifier bertipe PLAYER
+        skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(player.getUniqueId());
 
-        SkinIdentifier skinIdentifier = SkinIdentifier.of(
-                skinInfo.name(),
-                variant,
-                type
-        );
-        skinsRestorerApi.getPlayerStorage().setSkinIdOfPlayer(player.getUniqueId(), skinIdentifier);
-
+        // Apply langsung jika pemain online
         if (player.isOnline()) {
             skinsRestorerApi.getSkinApplier(Player.class).applySkin(player.getPlayer(), skinProperty);
         }
 
-        plugin.logDebug("Applied skin " + skinInfo.name() + " to " + player.getName());
+        plugin.logDebug("Applied skin " + skinInfo.name() + " to " + lastKnownName);
         future.complete(true);
-
         return future;
     }
 
@@ -118,6 +109,7 @@ public class SkinManager {
         PlayerData.SkinInfo skinInfo = playerData.getSkinById(skinId);
 
         if (skinInfo != null) {
+            // Hapus mapping skinId agar SR tidak memakainya
             skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(playerUuid);
         }
 
