@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.skinsrestorer.api.SkinsRestorer;
 import net.skinsrestorer.api.SkinsRestorerProvider;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -23,6 +24,9 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
     private SkinManager skinManager;
     private WebServer webServer;
     private int webPort;
+
+    // Task ID untuk autosave
+    private int autosaveTaskId = -1;
 
     @Override
     public void onEnable() {
@@ -57,7 +61,7 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             return;
         }
 
-        // 3. Inisialisasi SkinManager SEMENTARA
+        // 3. Inisialisasi SkinManager sementara (nullsafe)
         this.skinManager = new SkinManager(this, storage, null, null);
 
         // 4. Setup SkinsRestorer dengan cara benar (v15+)
@@ -88,11 +92,38 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
         } else {
             getLogger().severe("Command 'skinhub' not found! Check plugin.yml.");
         }
+
+        // 8. Jadwalkan autosave sesuai config (asinkron)
+        int saveIntervalMin = Math.max(1, getConfig().getInt("storage.save-interval-minutes", 15));
+        long periodTicks = saveIntervalMin * 60L * 20L;
+        this.autosaveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+            if (!storage.saveData()) {
+                getLogger().warning("Autosave failed: could not save skins.json");
+            } else {
+                logDebug("Autosave completed.");
+            }
+        }, periodTicks, periodTicks).getTaskId();
+        logDebug("Autosave scheduled every " + saveIntervalMin + " minute(s).");
     }
 
     @Override
     public void onDisable() {
-        // Pastikan web server berhenti saat plugin dinonaktifkan agar port dilepas
+        // Batalkan autosave dan simpan terakhir kali
+        try {
+            if (autosaveTaskId != -1) {
+                Bukkit.getScheduler().cancelTask(autosaveTaskId);
+                autosaveTaskId = -1;
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (storage != null) {
+                storage.saveData();
+            }
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING, "Error while saving data on shutdown", e);
+        }
+
+        // Pastikan web server berhenti agar port dilepas
         try {
             if (webServer != null) {
                 webServer.stop();
