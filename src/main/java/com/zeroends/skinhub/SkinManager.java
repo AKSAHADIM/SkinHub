@@ -83,7 +83,7 @@ public class SkinManager {
 
         String lastKnownName = player.getName() != null ? player.getName() : "Unknown";
 
-        // Simpan SkinProperty untuk pemain; ini yang akan dibaca SR saat login/refresh
+        // Simpan SkinProperty untuk pemain; SR akan menggunakan data ini saat login/refresh
         skinsRestorerApi.getSkinStorage().setPlayerSkinData(
                 player.getUniqueId(),
                 lastKnownName,
@@ -91,7 +91,7 @@ public class SkinManager {
                 System.currentTimeMillis()
         );
 
-        // Pastikan tidak ada skinId mapping yang salah, agar SR tidak mencoba parse identifier bertipe PLAYER
+        // Pastikan tidak ada skinId mapping yang salah agar SR tidak mencoba resolve identifier bertipe PLAYER
         skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(player.getUniqueId());
 
         // Apply langsung jika pemain online
