@@ -117,10 +117,8 @@ public class WebServer {
             return;
         }
 
-        // Resolve UUID from username (server cache)
-        OfflinePlayer offline = Bukkit.getOfflinePlayer(username);
-        UUID uuid = offline != null ? offline.getUniqueId() : null;
-
+        // Resolve UUID using helper (lebih ketat daripada getOfflinePlayer langsung)
+        UUID uuid = UsernameResolver.resolve(username);
         if (uuid == null) {
             ctx.status(HttpStatus.UNAUTHORIZED).json(Map.of("success", false, "message", "Invalid username."));
             return;
@@ -133,8 +131,13 @@ public class WebServer {
 
         String sessionToken = UUID.randomUUID().toString();
         pinManager.createSession(sessionToken, uuid, username);
-        // Cookie 30 days
-        ctx.cookie("skinhub_session", sessionToken, 60 * 60 * 24 * 30);
+
+        // Cookie age dari config (hari → detik)
+        int expiryDays = plugin.getConfig().getInt("web.session-expiry-days", 30);
+        int maxAgeSeconds = Math.max(1, expiryDays) * 24 * 60 * 60;
+
+        // Set cookie sesi. Catatan: untuk HttpOnly/Secure/SameSite, bisa dikonfigurasi proxy/https.
+        ctx.cookie("skinhub_session", sessionToken, maxAgeSeconds);
 
         ctx.json(Map.of("success", true, "message", "Login successful!"));
     }
