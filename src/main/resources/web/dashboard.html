@@ -5,37 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SkinHub - Dashboard</title>
     <link rel="stylesheet" href="style.css" />
-    <!-- Attempt to load skinview3d from multiple sources with fallback to local vendor -->
+
+    <!-- skinview3d v3.4.1: utama dari jsDelivr dengan fallback ke unpkg -->
     <script>
         (function loadSkinview3d() {
-            // List of candidates to try (CDN first, then local)
-            const candidates = [
-                'https://cdn.jsdelivr.net/npm/skinview3d@latest/dist/skinview3d.bundle.js',
-                'https://unpkg.com/skinview3d@latest/dist/skinview3d.bundle.js',
-                // local fallback (must be added to src/main/resources/web/vendor/)
-                'vendor/skinview3d.bundle.js'
+            const sources = [
+                "https://cdn.jsdelivr.net/npm/skinview3d@3.4.1/bundles/skinview3d.min.js",
+                "https://unpkg.com/skinview3d@3.4.1/bundles/skinview3d.min.js"
             ];
-
-            function tryLoad(index) {
-                if (index >= candidates.length) {
-                    console.warn('skinview3d: all load attempts failed; 3D preview will be disabled.');
+            function tryLoad(i) {
+                if (i >= sources.length) {
+                    console.warn("skinview3d: semua sumber gagal, 3D preview akan disabled.");
                     return;
                 }
-                const url = candidates[index];
-                const s = document.createElement('script');
-                s.src = url;
-                s.async = false;
-                s.onload = function () {
-                    console.info('skinview3d loaded from:', url);
+                const tag = document.createElement("script");
+                tag.src = sources[i];
+                tag.async = false;
+                tag.onload = () => console.info("skinview3d loaded from:", sources[i]);
+                tag.onerror = () => {
+                    console.warn("skinview3d failed from:", sources[i]);
+                    tryLoad(i + 1);
                 };
-                s.onerror = function () {
-                    console.warn('skinview3d failed to load from:', url);
-                    // try next candidate
-                    tryLoad(index + 1);
-                };
-                document.head.appendChild(s);
+                document.head.appendChild(tag);
             }
-
             tryLoad(0);
         })();
     </script>
@@ -51,8 +43,7 @@
 
         <div class="card">
             <h3>My Skin Collection (<span id="skin-count">0</span>/<span id="max-skins">0</span>)</h3>
-            <div id="skin-collection" class="skin-grid">
-                </div>
+            <div id="skin-collection" class="skin-grid"></div>
         </div>
 
         <div class="card" id="upload-card">
@@ -74,8 +65,7 @@
 
     <template id="skin-item-template">
         <div class="skin-item">
-            <div class="skin-preview">
-                </div>
+            <div class="skin-preview"></div>
             <p class="skin-name">Skin Name</p>
             <div class="skin-actions">
                 <button class="btn btn-apply">Apply</button>
