@@ -1,11 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SkinHub - Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/skinview3d@latest/dist/skinview3d.bundle.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Attempt to load skinview3d from multiple sources with fallback to local vendor -->
+    <script>
+        (function loadSkinview3d() {
+            // List of candidates to try (CDN first, then local)
+            const candidates = [
+                'https://cdn.jsdelivr.net/npm/skinview3d@latest/dist/skinview3d.bundle.js',
+                'https://unpkg.com/skinview3d@latest/dist/skinview3d.bundle.js',
+                // local fallback (must be added to src/main/resources/web/vendor/)
+                'vendor/skinview3d.bundle.js'
+            ];
+
+            function tryLoad(index) {
+                if (index >= candidates.length) {
+                    console.warn('skinview3d: all load attempts failed; 3D preview will be disabled.');
+                    return;
+                }
+                const url = candidates[index];
+                const s = document.createElement('script');
+                s.src = url;
+                s.async = false;
+                s.onload = function () {
+                    console.info('skinview3d loaded from:', url);
+                };
+                s.onerror = function () {
+                    console.warn('skinview3d failed to load from:', url);
+                    // try next candidate
+                    tryLoad(index + 1);
+                };
+                document.head.appendChild(s);
+            }
+
+            tryLoad(0);
+        })();
+    </script>
 </head>
 <body>
     <div class="container">
