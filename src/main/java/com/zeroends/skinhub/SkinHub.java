@@ -93,7 +93,10 @@ public class SkinHub extends JavaPlugin implements CommandExecutor {
             getLogger().severe("Command 'skinhub' not found! Check plugin.yml.");
         }
 
-        // 8. Jadwalkan autosave sesuai config (asinkron)
+        // 8. Register Listener untuk re-apply skin aktif saat join
+        getServer().getPluginManager().registerEvents(new PlayerJoinListener(skinManager), this);
+
+        // 9. Jadwalkan autosave sesuai config (asinkron)
         int saveIntervalMin = Math.max(1, getConfig().getInt("storage.save-interval-minutes", 15));
         long periodTicks = saveIntervalMin * 60L * 20L;
         this.autosaveTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
