@@ -69,12 +69,21 @@ public class SkinManager {
         }
 
         Player player = Bukkit.getPlayer(playerUuid);
+        CompletableFuture<Boolean> future;
         if (player == null || !player.isOnline()) {
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerUuid);
-            return applySkinToPlayer(offlinePlayer, skinInfo);
+            future = applySkinToPlayer(offlinePlayer, skinInfo);
+        } else {
+            future = applySkinToPlayer(player, skinInfo);
         }
 
-        return applySkinToPlayer(player, skinInfo);
+        return future.thenApply(success -> {
+            if (Boolean.TRUE.equals(success)) {
+                playerData.setActiveSkinId(skinId);
+                scheduleSave();
+            }
+            return success;
+        });
     }
 
     private CompletableFuture<Boolean> applySkinToPlayer(OfflinePlayer player, PlayerData.SkinInfo skinInfo) {
@@ -83,7 +92,6 @@ public class SkinManager {
 
         String lastKnownName = player.getName() != null ? player.getName() : "Unknown";
 
-        // Simpan SkinProperty untuk pemain; SR akan menggunakan data ini saat login/refresh
         skinsRestorerApi.getSkinStorage().setPlayerSkinData(
                 player.getUniqueId(),
                 lastKnownName,
@@ -91,10 +99,8 @@ public class SkinManager {
                 System.currentTimeMillis()
         );
 
-        // Pastikan tidak ada skinId mapping yang salah agar SR tidak mencoba resolve identifier bertipe PLAYER
         skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(player.getUniqueId());
 
-        // Apply langsung jika pemain online
         if (player.isOnline()) {
             skinsRestorerApi.getSkinApplier(Player.class).applySkin(player.getPlayer(), skinProperty);
         }
@@ -109,16 +115,45 @@ public class SkinManager {
         PlayerData.SkinInfo skinInfo = playerData.getSkinById(skinId);
 
         if (skinInfo != null) {
-            // Hapus mapping skinId agar SR tidak memakainya
             skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(playerUuid);
         }
 
         boolean removed = playerData.removeSkin(skinId);
         if (removed) {
+            if (playerData.getActiveSkinId() != null && playerData.getActiveSkinId() == skinId) {
+                playerData.setActiveSkinId(null);
+            }
             plugin.logDebug("Deleted skin ID " + skinId + " for " + playerUuid);
             scheduleSave();
         }
         return removed;
+    }
+
+    public void applyActiveSkinIfAny(UUID playerUuid) {
+        PlayerData data = storage.getPlayerData(playerUuid);
+        Long activeId = data.getActiveSkinId();
+        if (activeId == null) return;
+
+        PlayerData.SkinInfo skinInfo = data.getSkinById(activeId);
+        if (skinInfo == null) {
+            data.setActiveSkinId(null);
+            scheduleSave();
+            return;
+        }
+
+        Player player = Bukkit.getPlayer(playerUuid);
+        if (player != null) {
+            SkinProperty skinProperty = SkinProperty.of(skinInfo.texture(), skinInfo.signature());
+            skinsRestorerApi.getSkinStorage().setPlayerSkinData(
+                    player.getUniqueId(),
+                    player.getName() != null ? player.getName() : "Unknown",
+                    skinProperty,
+                    System.currentTimeMillis()
+            );
+            skinsRestorerApi.getPlayerStorage().removeSkinIdOfPlayer(player.getUniqueId());
+            skinsRestorerApi.getSkinApplier(Player.class).applySkin(player, skinProperty);
+            plugin.logDebug("Re-applied active skin ID " + activeId + " for " + player.getName());
+        }
     }
 
     public CompletableFuture<UploadResult> processUploadedSkin(UUID playerUuid, byte[] fileData, String fileName) {
