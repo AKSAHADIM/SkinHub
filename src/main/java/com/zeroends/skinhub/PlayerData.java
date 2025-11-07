@@ -9,8 +9,12 @@ public class PlayerData {
     // Daftar skin yang disimpan oleh pemain
     private final List<SkinInfo> skinSlots;
 
+    // Skin aktif yang sedang dipakai (persisten antar login)
+    private Long activeSkinId; // null jika tidak ada skin aktif
+
     public PlayerData() {
         this.skinSlots = new ArrayList<>();
+        this.activeSkinId = null;
     }
 
     /**
@@ -64,9 +68,18 @@ public class PlayerData {
         return null;
     }
 
+    // ========= Active skin persistence =========
+
+    public Long getActiveSkinId() {
+        return activeSkinId;
+    }
+
+    public void setActiveSkinId(Long activeSkinId) {
+        this.activeSkinId = activeSkinId;
+    }
+
     /**
      * Record untuk menyimpan data skin individu.
-     * Menggunakan System.currentTimeMillis() sebagai ID unik sederhana.
      */
     public record SkinInfo(
             String name,
